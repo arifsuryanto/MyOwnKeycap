@@ -1,0 +1,25 @@
+{
+  "common": {
+    "appName": "Keycap Platform",
+    "tagline": "AI-Powered Custom Keycaps",
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit"
+  },
+  "nav": {
+    "home": "Home",
+    "keyboards": "Keyboard Catalog",
+    "designs": "My Designs",
+    "orders": "Orders",
+    "login": "Sign In",
+    "logout": "Sign Out"
+  },
+  "hero": {
+    "title": "Custom Keycaps Designed with AI",
+    "subtitle": "Describe your dream keycaps, preview in interactive 3D, pay via QRIS, 3D printed & delivered.",
+    "ctaDesign": "Start Designing",
+    "ctaEstimator": "Estimate Price"
+  }
+}

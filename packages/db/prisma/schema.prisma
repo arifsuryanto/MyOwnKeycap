@@ -1,0 +1,478 @@
+// Keycap Platform — Prisma Schema
+// Source of truth: KEYCAP_PLATFORM_SPEC.md Section 6
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────
+
+enum Role {
+  USER
+  OPERATOR
+  ADMIN
+}
+
+enum OrderStatus {
+  DRAFT
+  AWAITING_PAYMENT
+  PAID
+  QUEUED
+  PENDING_APPROVAL
+  PRINTING
+  PRINT_FAILED
+  POST_PROCESSING
+  QC
+  PACKED
+  SHIPPED
+  DELIVERED
+  EXPIRED
+  CANCELLED
+  REFUND_PENDING
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  EXPIRED
+  FAILED
+  NEEDS_REFUND
+  REFUNDED
+}
+
+enum DesignStatus {
+  DRAFT
+  GENERATING
+  READY
+  FAILED
+  REJECTED
+}
+
+enum PrintJobStatus {
+  PENDING
+  SLICING
+  AWAITING_OPERATOR
+  PRINTING
+  DONE
+  FAILED
+  CANCELLED
+  STALLED
+}
+
+enum PrinterAdapterKind {
+  MOONRAKER
+  OCTOPRINT
+  PRUSALINK
+  BAMBU_LAN
+  SIMULATOR
+}
+
+// ─── Auth.js Models ──────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Domain Models ───────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  role          Role      @default(USER)
+  creditBalance Int       @default(0)
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Auth.js relations
+  accounts Account[]
+  sessions Session[]
+
+  // Domain relations
+  designs  Design[]
+  orders   Order[]
+  addresses Address[]
+  apiKeys  ApiKey[]
+  ledger   CreditLedger[]
+}
+
+model KeyboardModel {
+  id         String  @id @default(cuid())
+  slug       String  @unique
+  brand      String
+  name       String
+  layoutJson Json    // KLE-compatible, validated by Zod
+  switchType String  // MX | CHOC_V1 | ...
+  keyCount   Int
+  verified   Boolean @default(false)
+  sourceNote String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  designs Design[]
+
+  @@index([brand])
+  @@index([verified])
+}
+
+model Design {
+  id               String       @id @default(cuid())
+  userId           String
+  keyboardModelId  String?
+  customLayout     Json?        // KLE JSON for unverified/custom layouts
+  prompt           String       @db.Text
+  specJson         Json         // KeycapDesignSpec (validated)
+  specHash         String
+  status           DesignStatus @default(DRAFT)
+  previewGlbKey    String?
+  moderationFlag   Boolean      @default(false)
+  moderationReason String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id])
+  keyboardModel KeyboardModel? @relation(fields: [keyboardModelId], references: [id])
+  items         DesignItem[]
+  orders        Order[]
+
+  @@index([userId, createdAt])
+  @@index([specHash])
+  @@index([status])
+}
+
+/// Global cache of unique keycap geometries, keyed by specHash
+model KeycapAsset {
+  id           String  @id @default(cuid())
+  specHash     String  @unique
+  paramsJson   Json    // Full CAD parameters for reproducibility
+  stlKey       String  // S3 key for STL file
+  threeMfKey   String  // S3 key for 3MF file
+  glbKey       String  // S3 key for GLB preview file
+  volumeMm3    Float
+  estGrams     Float
+  printMinutes Int
+  minWallMm    Float
+  validated    Boolean @default(false)
+  createdAt    DateTime @default(now())
+
+  designItems DesignItem[]
+  orderItems  OrderItem[]
+}
+
+model DesignItem {
+  id       String @id @default(cuid())
+  designId String
+  assetId  String
+  keyId    String // Key identifier within the layout (e.g., "esc", "a", "space")
+  qty      Int    @default(1)
+
+  design Design      @relation(fields: [designId], references: [id], onDelete: Cascade)
+  asset  KeycapAsset @relation(fields: [assetId], references: [id])
+
+  @@index([designId])
+}
+
+// ─── Orders ──────────────────────────────────────────────────
+
+model Order {
+  id               String      @id @default(cuid())
+  publicCode       String      @unique // e.g., KC-2026-000123
+  userId           String
+  designId         String
+  addressId        String?
+  status           OrderStatus @default(DRAFT)
+  subtotalIdr      Int
+  discountIdr      Int         @default(0)
+  shippingIdr      Int         @default(0)
+  totalIdr         Int
+  bundleId         String?
+  pricingSnapshot  Json        // Frozen pricing config at time of order
+  estimatedReadyAt DateTime?
+  trackingNumber   String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  paidAt           DateTime?
+
+  user     User         @relation(fields: [userId], references: [id])
+  design   Design       @relation(fields: [designId], references: [id])
+  address  Address?     @relation(fields: [addressId], references: [id])
+  bundle   Bundle?      @relation(fields: [bundleId], references: [id])
+  items    OrderItem[]
+  payments Payment[]
+  events   OrderEvent[]
+  printJobs PrintJob[]
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@index([publicCode])
+}
+
+model OrderItem {
+  id          String @id @default(cuid())
+  orderId     String
+  assetId     String
+  qty         Int
+  unitPriceIdr Int
+
+  order Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  asset KeycapAsset @relation(fields: [assetId], references: [id])
+
+  @@index([orderId])
+}
+
+model OrderEvent {
+  id        String       @id @default(cuid())
+  orderId   String
+  from      OrderStatus?
+  to        OrderStatus
+  actorId   String?      // User/system who triggered the transition
+  meta      Json?        // Additional context (e.g., reason for failure)
+  createdAt DateTime     @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+}
+
+// ─── Payments ────────────────────────────────────────────────
+
+model Payment {
+  id          String        @id @default(cuid())
+  orderId     String
+  provider    String        // "xendit" | "midtrans"
+  providerRef String        @unique
+  amountIdr   Int
+  status      PaymentStatus @default(PENDING)
+  qrString    String?       @db.Text
+  expiresAt   DateTime
+  paidAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@index([status])
+}
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String
+  eventId     String   // Provider's unique event identifier
+  payloadHash String   // SHA-256 of raw webhook body
+  receivedAt  DateTime @default(now())
+  processedAt DateTime?
+
+  @@unique([provider, eventId])
+}
+
+// ─── Printing ────────────────────────────────────────────────
+
+model Printer {
+  id         String            @id @default(cuid())
+  name       String
+  adapter    PrinterAdapterKind
+  bedX       Int               // Bed size X in mm
+  bedY       Int               // Bed size Y in mm
+  bedZ       Int               // Bed size Z in mm
+  agentId    String?
+  maxNozzleC Int               // Max nozzle temperature (°C)
+  maxBedC    Int               // Max bed temperature (°C)
+  lastSeenAt DateTime?
+  enabled    Boolean           @default(true)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  agent     Agent?     @relation(fields: [agentId], references: [id])
+  printJobs PrintJob[]
+}
+
+model Agent {
+  id         String    @id @default(cuid())
+  name       String
+  publicKey  String    @db.Text // Ed25519 public key (base64)
+  revokedAt  DateTime?
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  printers Printer[]
+}
+
+model PrintJob {
+  id            String         @id @default(cuid())
+  orderId       String
+  printerId     String?
+  status        PrintJobStatus @default(PENDING)
+  plateJson     Json           // Layout of keycaps on the print bed
+  profileId     String         // Slicer profile identifier
+  material      String         // PETG | PLA | ASA
+  attempt       Int            @default(1)
+  approvedById  String?        // Admin/operator who approved the job
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  failureReason String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  order   Order    @relation(fields: [orderId], references: [id])
+  printer Printer? @relation(fields: [printerId], references: [id])
+
+  @@index([orderId])
+  @@index([status])
+  @@index([printerId])
+}
+
+model Filament {
+  id         String @id @default(cuid())
+  material   String // PETG | PLA | ASA
+  color      String
+  brand      String
+  costPerKgIdr Int
+  remainingG Int   // Remaining grams on spool
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([material])
+}
+
+// ─── Commerce ────────────────────────────────────────────────
+
+model Bundle {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  name          String
+  description   String?
+  ruleJson      Json      // Bundle rules (min/max keys, applicable profiles, etc.)
+  fixedPriceIdr Int?      // Fixed bundle price (null = use progressive discount)
+  active        Boolean   @default(true)
+  startsAt      DateTime?
+  endsAt        DateTime?
+  stockSlots    Int?      // For early bird: remaining available slots
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  orders Order[]
+}
+
+model PricingConfig {
+  id          String  @id @default(cuid())
+  version     Int     @unique
+  json        Json    // Full pricing configuration
+  active      Boolean @default(false)
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([active])
+}
+
+// ─── User Data ───────────────────────────────────────────────
+
+model Address {
+  id         String @id @default(cuid())
+  userId     String
+  label      String? // "Home", "Office"
+  recipient  String
+  phone      String
+  line1      String
+  line2      String?
+  city       String
+  province   String
+  postalCode String
+  areaId     String? // For shipping API (Biteship/RajaOngkir area code)
+  isDefault  Boolean @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([userId])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  name       String    // Human-readable label
+  prefix     String    @unique // First 8 chars for identification
+  hash       String    // SHA-256 of the full key
+  scopes     String[]  // ["designs:read", "designs:write", etc.]
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model CreditLedger {
+  id        String   @id @default(cuid())
+  userId    String
+  delta     Int      // Positive = credit added, negative = credit used
+  reason    String   // "purchase", "ai_generation", "refund", etc.
+  refId     String?  // Reference to related entity (orderId, designId)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+// ─── Audit ───────────────────────────────────────────────────
+
+/// Append-only audit log. Revoke UPDATE/DELETE at DB role level.
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?  // User who performed the action (null = system)
+  action    String   // e.g., "order.transition", "admin.pricing_config.create"
+  entity    String   // e.g., "Order", "PricingConfig"
+  entityId  String?
+  meta      Json?    // Additional context
+  ip        String?  // Request IP (no other PII)
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([actorId, createdAt])
+  @@index([createdAt])
+}

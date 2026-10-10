@@ -1,0 +1,78 @@
+# Keycap Platform — Development Docker Compose
+# Start with: docker compose -f infra/docker-compose.yml up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: keycap-postgres
+    environment:
+      POSTGRES_USER: keycap
+      POSTGRES_PASSWORD: keycap_dev
+      POSTGRES_DB: keycap
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycap"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: keycap-redis
+    command: redis-server --requirepass keycap_dev
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "keycap_dev", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: keycap-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: keycap_minio
+      MINIO_ROOT_PASSWORD: keycap_minio_dev
+    ports:
+      - "9000:9000"  # S3 API
+      - "9001:9001"  # Console UI
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # CAD Service — Python FastAPI + build123d
+  cad:
+    build:
+      context: ../services/cad
+      dockerfile: Dockerfile
+    container_name: keycap-cad
+    environment:
+      CAD_SHARED_SECRET: dev_cad_secret
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: keycap_minio
+      S3_SECRET_KEY: keycap_minio_dev
+      S3_BUCKET: keycap-assets
+    ports:
+      - "8100:8100"
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: "1G"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  minio_data:

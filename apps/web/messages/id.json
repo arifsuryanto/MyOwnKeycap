@@ -1,0 +1,25 @@
+{
+  "common": {
+    "appName": "Keycap Platform",
+    "tagline": "Custom Keycap Desain AI",
+    "loading": "Memuat...",
+    "save": "Simpan",
+    "cancel": "Batal",
+    "delete": "Hapus",
+    "edit": "Ubah"
+  },
+  "nav": {
+    "home": "Beranda",
+    "keyboards": "Katalog Keyboard",
+    "designs": "Desain Saya",
+    "orders": "Pesanan",
+    "login": "Masuk",
+    "logout": "Keluar"
+  },
+  "hero": {
+    "title": "Keycap Custom Desain dengan AI",
+    "subtitle": "Deskripsikan tema keycap impian Anda, preview 3D interaktif, bayar QRIS, dicetak & dikirim.",
+    "ctaDesign": "Mulai Desain",
+    "ctaEstimator": "Hitung Estimasi Harga"
+  }
+}

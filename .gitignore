@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+.next/
+out/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Prisma
+packages/db/prisma/*.db
+packages/db/prisma/*.db-journal
+
+# Turbo
+.turbo/
+
+# Debug
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test
+coverage/
+
+# Docker volumes (local)
+infra/data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+services/cad/.venv/
+
+# Generated
+*.tsbuildinfo
+
+# Secrets — never commit
+*.pem
+*.key
+agent-key.json
