@@ -1,4 +1,4 @@
-# Keycap Platform — Development Docker Compose
+﻿# Keycap Platform â€” Development Docker Compose
 # Start with: docker compose -f infra/docker-compose.yml up -d
 
 services:
@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: keycap_dev
       POSTGRES_DB: keycap
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -52,7 +52,7 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # CAD Service — Python FastAPI + build123d
+  # CAD Service â€” Python FastAPI + build123d
   cad:
     build:
       context: ../services/cad
@@ -76,3 +76,4 @@ services:
 volumes:
   pgdata:
   minio_data:
+

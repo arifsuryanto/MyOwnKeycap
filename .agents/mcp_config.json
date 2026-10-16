@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "blender-mcp": {
+      "command": "node",
+      "args": [
+        "C:/Users/Komputer/antigravity-blender-mcp/src/mcp-server/dist/index.js"
+      ],
+      "env": {
+        "BLENDER_HOST": "127.0.0.1",
+        "BLENDER_PORT": "9876",
+        "LOG_LEVEL": "info"
+      }
+    }
+  }
+}

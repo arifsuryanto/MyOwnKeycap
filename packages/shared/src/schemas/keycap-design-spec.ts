@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createHash } from 'crypto';
 
-// ─── Primitives ──────────────────────────────────────────────
+// ─── Primitives ─────────────────────────────────────────────────────────────
 
 export const Profile = z.enum(['CHERRY', 'OEM']);
 export type Profile = z.infer<typeof Profile>;
@@ -27,7 +27,7 @@ const Hex = z
   .string()
   .regex(/^#[0-9a-fA-F]{6}$/, 'Must be a valid hex color (e.g., #FF00AA)');
 
-// ─── Legend ──────────────────────────────────────────────────
+// ─── Legend ─────────────────────────────────────────────────────────────────
 
 export const LegendSpec = z
   .object({
@@ -45,7 +45,32 @@ export const LegendSpec = z
   .strict();
 export type LegendSpec = z.infer<typeof LegendSpec>;
 
-// ─── Key Groups ──────────────────────────────────────────────
+// ─── 3D Image Relief / Heightmap ───────────────────────────────────────────
+
+export const ImageReliefSpec = z
+  .object({
+    imageUrl: z.string().min(1),
+    name: z.string().max(60).optional(),
+    depthMm: z.number().min(0.2).max(0.8).default(0.4),
+    mode: z.enum(['EMBOSS', 'ENGRAVE']).default('EMBOSS'),
+    invert: z.boolean().default(false),
+    scale: z.number().min(0.1).max(1.0).default(0.75),
+  })
+  .strict();
+export type ImageReliefSpec = z.infer<typeof ImageReliefSpec>;
+
+// ─── Key Selection Modes ───────────────────────────────────────────────────
+
+export const KeySelectionMode = z.enum([
+  'FULL_SET',
+  'WASD',
+  'ARROWS',
+  'ACCENT',
+  'CUSTOM',
+]);
+export type KeySelectionMode = z.infer<typeof KeySelectionMode>;
+
+// ─── Key Groups ─────────────────────────────────────────────────────────────
 
 export const KeyGroup = z.enum([
   'MODIFIERS',
@@ -60,7 +85,7 @@ export const KeyGroup = z.enum([
 ]);
 export type KeyGroup = z.infer<typeof KeyGroup>;
 
-// ─── Overrides ───────────────────────────────────────────────
+// ─── Overrides ──────────────────────────────────────────────────────────────
 
 export const KeyOverride = z
   .object({
@@ -71,11 +96,12 @@ export const KeyOverride = z
     baseColor: Hex.optional(),
     legendColor: Hex.optional(),
     legend: LegendSpec.optional(),
+    relief: ImageReliefSpec.optional(),
   })
   .strict();
 export type KeyOverride = z.infer<typeof KeyOverride>;
 
-// ─── Main Spec ───────────────────────────────────────────────
+// ─── Main Spec ──────────────────────────────────────────────────────────────
 
 export const KeycapDesignSpec = z
   .object({
@@ -98,12 +124,19 @@ export const KeycapDesignSpec = z
         wallMm: z.number().min(1.2).max(2.4).default(1.5),
       })
       .strict(),
+    selection: z
+      .object({
+        mode: KeySelectionMode.default('FULL_SET'),
+        selectedKeys: z.array(z.string().max(32)).optional(),
+      })
+      .optional(),
+    relief: ImageReliefSpec.optional(),
     overrides: z.array(KeyOverride).max(60),
   })
   .strict();
 export type KeycapDesignSpec = z.infer<typeof KeycapDesignSpec>;
 
-// ─── Helpers ─────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 /**
  * Produce a canonical JSON string from a KeycapDesignSpec.

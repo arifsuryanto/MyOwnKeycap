@@ -1,4 +1,4 @@
-from typing import Optional, List, Literal
+﻿from typing import Optional, List, Literal
 from pydantic import BaseModel, Field
 
 ProfileEnum = Literal["CHERRY", "OEM"]
@@ -17,6 +17,14 @@ class LegendParams(BaseModel):
     mode: LegendModeEnum = "ENGRAVE"
     position: LegendPositionEnum = "CENTER"
 
+class ImageReliefParams(BaseModel):
+    image_url: str
+    name: Optional[str] = None
+    depth_mm: float = Field(default=0.4, ge=0.2, le=0.8)
+    mode: Literal["EMBOSS", "ENGRAVE"] = "EMBOSS"
+    invert: bool = False
+    scale: float = Field(default=0.75, ge=0.1, le=1.0)
+
 class KeycapGenerateParams(BaseModel):
     key_id: str
     unit_size: float = Field(default=1.0, ge=1.0, le=7.0)
@@ -29,6 +37,7 @@ class KeycapGenerateParams(BaseModel):
     stem_tolerance_mm: float = Field(default=0.15, ge=0.05, le=0.30)
     wall_mm: float = Field(default=1.5, ge=1.2, le=2.4)
     legend: Optional[LegendParams] = None
+    relief: Optional[ImageReliefParams] = None
     spec_hash: str
 
 class ValidationMetrics(BaseModel):
@@ -47,3 +56,4 @@ class KeycapResponse(BaseModel):
     threemf_url: Optional[str] = None
     glb_url: Optional[str] = None
     metrics: ValidationMetrics
+

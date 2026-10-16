@@ -1,26 +1,43 @@
 {
-  "$schema": "https://turbo.build/schema.json",
-  "tasks": {
-    "build": {
-      "dependsOn": ["^build"],
-      "outputs": [".next/**", "dist/**", "!.next/cache/**"]
-    },
-    "dev": {
-      "cache": false,
-      "persistent": true
-    },
-    "lint": {
-      "dependsOn": ["^build"]
-    },
-    "typecheck": {
-      "dependsOn": ["^build"]
-    },
-    "test": {
-      "dependsOn": ["^build"]
-    },
-    "test:int": {
-      "dependsOn": ["^build"],
-      "cache": false
-    }
-  }
+    "$schema":  "https://turbo.build/schema.json",
+    "tasks":  {
+                  "build":  {
+                                "dependsOn":  [
+                                                  "^build"
+                                              ],
+                                "outputs":  [
+                                                ".next/**",
+                                                "dist/**",
+                                                "!.next/cache/**"
+                                            ]
+                            },
+                  "dev":  {
+                              "cache":  false,
+                              "persistent":  true
+                          },
+                  "lint":  {
+                               "dependsOn":  [
+                                                 "^build"
+                                             ]
+                           },
+                  "typecheck":  {
+                                    "dependsOn":  [
+                                                      "^build"
+                                                  ]
+                                },
+                  "test":  {
+                               "dependsOn":  [
+                                                 "^build"
+                                             ]
+                           },
+                  "test:int":  {
+                                   "dependsOn":  [
+                                                     "^build"
+                                                 ],
+                                   "cache":  false
+                               },
+                  "test:e2e":  {
+                                   "cache":  false
+                               }
+              }
 }

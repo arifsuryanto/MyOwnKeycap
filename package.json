@@ -1,23 +1,24 @@
 {
-  "name": "keycap-platform",
-  "private": true,
-  "packageManager": "pnpm@9.15.4",
-  "scripts": {
-    "dev": "turbo dev",
-    "build": "turbo build",
-    "lint": "turbo lint",
-    "typecheck": "turbo typecheck",
-    "test": "turbo test",
-    "test:int": "turbo test:int",
-    "db:generate": "pnpm --filter @keycap/db generate",
-    "db:migrate": "pnpm --filter @keycap/db migrate:dev",
-    "db:push": "pnpm --filter @keycap/db push",
-    "db:seed": "pnpm --filter @keycap/db seed",
-    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\""
-  },
-  "devDependencies": {
-    "turbo": "^2.4.0",
-    "prettier": "^3.5.0"
-  }
+    "name":  "keycap-platform",
+    "private":  true,
+    "packageManager":  "pnpm@9.15.4",
+    "scripts":  {
+                    "dev":  "turbo dev",
+                    "build":  "turbo build",
+                    "lint":  "turbo lint",
+                    "typecheck":  "turbo typecheck",
+                    "test":  "turbo test",
+                    "test:int":  "turbo test:int",
+                    "db:generate":  "pnpm --filter @keycap/db generate",
+                    "db:migrate":  "pnpm --filter @keycap/db migrate:dev",
+                    "db:push":  "pnpm --filter @keycap/db push",
+                    "db:seed":  "pnpm --filter @keycap/db seed",
+                    "format":  "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+                    "format:check":  "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+                    "test:e2e":  "pnpm --filter @keycap/web test:e2e"
+                },
+    "devDependencies":  {
+                            "turbo":  "^2.4.0",
+                            "prettier":  "^3.5.0"
+                        }
 }

@@ -1,7 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
+import KeySelectionToolbar, { KeySelectionMode } from './KeySelectionToolbar';
+import KeycapCanvas3D from './KeycapCanvas3D';
+import ImageReliefUploader from './ImageReliefUploader';
+import { ImageReliefSpec } from '@keycap/shared';
+import { BundleType } from '@keycap/pricing';
 
 interface KeyboardModelOption {
   id: string;
@@ -42,6 +47,103 @@ export default function DesignStudio({
   const [generatedSpec, setGeneratedSpec] = useState<any | null>(null);
   const [designId, setDesignId] = useState<string | null>(null);
 
+  // 3D Preview, Partial Key Selection, and Image-to-3D Relief
+  const [previewTab, setPreviewTab] = useState<'2D' | '3D'>('2D');
+  const [selectionMode, setSelectionMode] = useState<KeySelectionMode>('FULL_SET');
+  const [manualSelectedKeyIds, setManualSelectedKeyIds] = useState<string[]>([]);
+  const [imageRelief, setImageRelief] = useState<ImageReliefSpec | null>(null);
+
+  const keys: any[] = useMemo(() => selectedModel?.layoutJson?.keys || [], [selectedModel]);
+
+  // Resolve active keys based on selection mode
+  const selectedKeyIds = useMemo(() => {
+    if (selectionMode === 'FULL_SET') {
+      return keys.map((k) => k.id);
+    }
+    if (selectionMode === 'WASD') {
+      return keys
+        .filter((k) => {
+          const l = (k.label || '').toUpperCase();
+          const id = (k.id || '').toLowerCase();
+          return l === 'W' || l === 'A' || l === 'S' || l === 'D' || ['w', 'a', 's', 'd'].includes(id);
+        })
+        .map((k) => k.id);
+    }
+    if (selectionMode === 'ARROWS') {
+      return keys
+        .filter((k) => {
+          const l = k.label || '';
+          const id = (k.id || '').toLowerCase();
+          return (
+            ['up', 'down', 'left', 'right'].includes(id) ||
+            ['↑', '↓', '←', '→', '▲', '▼', '◄', '►'].includes(l)
+          );
+        })
+        .map((k) => k.id);
+    }
+    if (selectionMode === 'ACCENT') {
+      return keys
+        .filter((k) => {
+          const l = (k.label || '').toUpperCase();
+          const id = (k.id || '').toLowerCase();
+          return (
+            ['esc', 'enter', 'space'].includes(id) ||
+            id.startsWith('esc') ||
+            id.startsWith('space') ||
+            ['ESC', 'ENTER', 'SPACE'].includes(l)
+          );
+        })
+        .map((k) => k.id);
+    }
+    // CUSTOM mode
+    return manualSelectedKeyIds;
+  }, [selectionMode, keys, manualSelectedKeyIds]);
+
+  // Determine bundle tier and estimated price based on selected keys count
+  const { bundleTier, estimatedPrice } = useMemo(() => {
+    const count = selectedKeyIds.length;
+    let tier: BundleType = 'SAMPLER';
+    let discount = 0;
+
+    if (count > 50) {
+      tier = 'FULL_SET';
+      discount = 0.2; // 20%
+    } else if (count >= 5) {
+      tier = 'ACCENT';
+      discount = 0.1; // 10%
+    } else {
+      tier = 'SAMPLER';
+      discount = 0.0;
+    }
+
+    const pricePerKey = 15000; // Base IDR
+    const rawTotal = count * pricePerKey;
+    const finalTotal = Math.max(15000, Math.round(rawTotal * (1 - discount)));
+
+    return { bundleTier: tier, estimatedPrice: finalTotal };
+  }, [selectedKeyIds]);
+
+  const handleKeyClick = (keyId: string) => {
+    if (selectionMode !== 'CUSTOM') {
+      const current = new Set(selectedKeyIds);
+      if (current.has(keyId)) current.delete(keyId);
+      else current.add(keyId);
+      setManualSelectedKeyIds(Array.from(current));
+      setSelectionMode('CUSTOM');
+    } else {
+      setManualSelectedKeyIds((prev) =>
+        prev.includes(keyId) ? prev.filter((id) => id !== keyId) : [...prev, keyId]
+      );
+    }
+  };
+
+  const handleModeChange = (mode: KeySelectionMode) => {
+    setSelectionMode(mode);
+    if (mode === 'CUSTOM') {
+      setManualSelectedKeyIds(selectedKeyIds);
+    }
+  };
+
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim() || !selectedModel) return;
@@ -59,6 +161,11 @@ export default function DesignStudio({
           options: {
             profile,
             material,
+            selection: {
+              mode: selectionMode,
+              selectedKeys: selectedKeyIds,
+            },
+            relief: imageRelief,
           },
         }),
       });
@@ -79,17 +186,20 @@ export default function DesignStudio({
 
   // Helper to get key appearance
   const getKeyStyle = (keyItem: any) => {
+    const isSelected = selectedKeyIds.includes(keyItem.id);
+
     if (!generatedSpec) {
       return {
-        backgroundColor: '#27272a',
-        color: '#a1a1aa',
-        borderColor: '#3f3f46',
+        backgroundColor: isSelected ? '#16538A' : '#0A2640',
+        color: isSelected ? '#FAF0CA' : '#8FAEC7',
+        borderColor: isSelected ? '#F95738' : 'rgba(13, 59, 102, 0.2)',
+        opacity: isSelected ? 1 : 0.4,
       };
     }
 
     const { global, overrides } = generatedSpec;
-    let baseColor = global.baseColor || '#1a1a1a';
-    let legendColor = global.legendColor || '#f4f4f5';
+    let baseColor = global.baseColor || '#0D3B66';
+    let legendColor = global.legendColor || '#FAF0CA';
 
     // Find override for this key
     if (Array.isArray(overrides)) {
@@ -107,34 +217,37 @@ export default function DesignStudio({
     return {
       backgroundColor: baseColor,
       color: legendColor,
-      borderColor: `${legendColor}33`,
+      borderColor: isSelected ? '#F95738' : `${legendColor}44`,
+      opacity: isSelected ? 1 : 0.4,
     };
   };
 
-  const keys: any[] = selectedModel?.layoutJson?.keys || [];
   const rowNumbers = Array.from(new Set(keys.map((k) => k.row))).sort(
-    (a, b) => a - b,
+    (a: number, b: number) => a - b,
   );
+
+  const currentBaseColor = generatedSpec?.global?.baseColor || '#0D3B66';
+  const currentLegendColor = generatedSpec?.global?.legendColor || '#FAF0CA';
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Top Banner */}
-      <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-zinc-800 pb-6">
+      <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-[#FAF0CA]/10 pb-6">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
-            AI Keycap Studio
+          <h1 className="text-3xl font-extrabold tracking-tight text-[#FAF0CA] sm:text-4xl">
+            AI Keycap Studio &amp; 3D Lab
           </h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            Deskripsikan konsep dan estetika keycap Anda. AI mendesain skema warna, font, dan geometri yang siap cetak.
+          <p className="mt-1 text-sm text-[#BACAD6]">
+            Kustomisasi keycap satuan (WASD / Accent) hingga full set dengan AI, preview 3D interaktif, dan relief timbul dari gambar.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />
+          <span className="clay-pill inline-flex items-center gap-1.5 bg-[#0D3B66] border border-[#FAF0CA]/12 px-3.5 py-1 text-xs font-bold text-[#0D3B66] shadow-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#F95738] animate-pulse" />
             Gemini 3.8 Flash Engine
           </span>
-          <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1 text-xs text-zinc-400">
+          <span className="clay-pill bg-[#08233C] border border-[#F4D35E]/60 px-3 py-1 text-xs font-semibold text-[#BACAD6]">
             5 Kuota Gratis / Hari
           </span>
         </div>
@@ -145,13 +258,13 @@ export default function DesignStudio({
         <div className="lg:col-span-5 flex flex-col gap-6">
           <form
             onSubmit={handleGenerate}
-            className="rounded-3xl border border-zinc-800 bg-zinc-900/50 p-6 backdrop-blur-md shadow-2xl"
+            className="clay-card p-6 sm:p-7 bg-[#0D3B66] border border-[#FAF0CA]/12 text-[#FAF0CA] shadow-md"
           >
-            <h2 className="text-lg font-bold text-white mb-4">Parameter Desain</h2>
+            <h2 className="text-lg font-extrabold text-[#0D3B66] mb-4">Parameter Desain</h2>
 
             {/* Model Selector */}
             <div className="mb-5">
-              <label className="block text-xs font-semibold text-zinc-300 mb-2">
+              <label className="block text-xs font-bold text-[#0D3B66] mb-2">
                 1. Target Keyboard
               </label>
               <select
@@ -160,7 +273,7 @@ export default function DesignStudio({
                   const found = initialModels.find((m) => m.slug === e.target.value);
                   if (found) setSelectedModel(found);
                 }}
-                className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3.5 py-2.5 text-sm text-zinc-100 shadow-inner focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="w-full rounded-2xl border border-[#FAF0CA]/15 bg-[#08233C] px-4 py-3 text-sm text-[#FAF0CA] focus:border-[#0D3B66] focus:bg-[#0D3B66] focus:outline-none focus:ring-2 focus:ring-[#F4D35E] font-medium"
               >
                 {initialModels.map((m) => (
                   <option key={m.id} value={m.slug}>
@@ -173,10 +286,10 @@ export default function DesignStudio({
             {/* Prompt Textarea */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-semibold text-zinc-300">
+                <label className="text-xs font-bold text-[#0D3B66]">
                   2. Prompt Tema &amp; Estetika
                 </label>
-                <span className="text-[11px] text-zinc-500">
+                <span className="text-[11px] font-mono text-[#BACAD6]">
                   {prompt.length}/600
                 </span>
               </div>
@@ -186,22 +299,22 @@ export default function DesignStudio({
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Deskripsikan warna, nuansa, mood, atau gaya... Contoh: Nuansa kedai kopi sore hari dengan cokelat espresso, beige latte cream, dan aksen karamel pada spasi."
-                className="w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3.5 text-sm text-zinc-100 placeholder-zinc-500 shadow-inner focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="w-full rounded-2xl border border-[#FAF0CA]/15 bg-[#08233C] p-4 text-sm text-[#FAF0CA] placeholder-[#2D4863]/60 focus:border-[#0D3B66] focus:bg-[#0D3B66] focus:outline-none focus:ring-2 focus:ring-[#F4D35E] font-medium leading-relaxed"
               />
             </div>
 
             {/* Preset chips */}
             <div className="mb-6">
-              <p className="text-[11px] font-semibold text-zinc-400 mb-2">
+              <p className="text-[11px] font-bold text-[#BACAD6] mb-2">
                 Inspirasi Tema Cepat:
               </p>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-2">
                 {PRESET_PROMPTS.map((preset, i) => (
                   <button
                     key={i}
                     type="button"
                     onClick={() => setPrompt(preset)}
-                    className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-violet-500/40 hover:text-white text-left"
+                    className="clay-pill bg-[#08233C] hover:bg-[#F4D35E]/30 border border-[#FAF0CA]/12 px-3 py-1.5 text-[11px] font-semibold text-[#BACAD6] hover:text-[#0D3B66] transition cursor-pointer text-left"
                   >
                     {preset.split('dengan')[0]}...
                   </button>
@@ -212,17 +325,17 @@ export default function DesignStudio({
             {/* Profile & Material Grid */}
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-2">
-                  Profil
+                <label className="block text-xs font-bold text-[#0D3B66] mb-2">
+                  Profil Keycap
                 </label>
-                <div className="flex rounded-xl border border-zinc-700 bg-zinc-950 p-1">
+                <div className="flex rounded-2xl border border-[#FAF0CA]/15 bg-[#08233C] p-1">
                   <button
                     type="button"
                     onClick={() => setProfile('CHERRY')}
-                    className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition ${
+                    className={`flex-1 rounded-xl py-2 text-xs font-bold transition cursor-pointer ${
                       profile === 'CHERRY'
-                        ? 'bg-violet-600 text-white shadow-md'
-                        : 'text-zinc-400 hover:text-zinc-200'
+                        ? 'bg-[#0D3B66] text-white shadow-sm'
+                        : 'text-[#BACAD6] hover:text-[#0D3B66]'
                     }`}
                   >
                     Cherry
@@ -230,10 +343,10 @@ export default function DesignStudio({
                   <button
                     type="button"
                     onClick={() => setProfile('OEM')}
-                    className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition ${
+                    className={`flex-1 rounded-xl py-2 text-xs font-bold transition cursor-pointer ${
                       profile === 'OEM'
-                        ? 'bg-violet-600 text-white shadow-md'
-                        : 'text-zinc-400 hover:text-zinc-200'
+                        ? 'bg-[#0D3B66] text-white shadow-sm'
+                        : 'text-[#BACAD6] hover:text-[#0D3B66]'
                     }`}
                   >
                     OEM
@@ -242,19 +355,19 @@ export default function DesignStudio({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-300 mb-2">
-                  Material
+                <label className="block text-xs font-bold text-[#0D3B66] mb-2">
+                  Material Cetak
                 </label>
-                <div className="flex rounded-xl border border-zinc-700 bg-zinc-950 p-1">
+                <div className="flex rounded-2xl border border-[#FAF0CA]/15 bg-[#08233C] p-1">
                   {(['PETG', 'PLA'] as const).map((mat) => (
                     <button
                       key={mat}
                       type="button"
                       onClick={() => setMaterial(mat)}
-                      className={`flex-1 rounded-lg py-1.5 text-xs font-semibold transition ${
+                      className={`flex-1 rounded-xl py-2 text-xs font-bold transition cursor-pointer ${
                         material === mat
-                          ? 'bg-violet-600 text-white shadow-md'
-                          : 'text-zinc-400 hover:text-zinc-200'
+                          ? 'bg-[#0D3B66] text-white shadow-sm'
+                          : 'text-[#BACAD6] hover:text-[#0D3B66]'
                       }`}
                     >
                       {mat}
@@ -264,8 +377,16 @@ export default function DesignStudio({
               </div>
             </div>
 
+            {/* Image-to-3D Relief Uploader */}
+            <div className="mb-6">
+              <ImageReliefUploader
+                value={imageRelief}
+                onChange={setImageRelief}
+              />
+            </div>
+
             {error && (
-              <div className="mb-4 rounded-xl border border-red-500/40 bg-red-950/30 p-3 text-xs text-red-300">
+              <div className="mb-4 clay-card bg-[#F95738]/10 border border-[#F95738]/30 p-3.5 text-xs text-[#F95738] font-bold rounded-2xl">
                 ⚠️ {error}
               </div>
             )}
@@ -274,7 +395,7 @@ export default function DesignStudio({
             <button
               type="submit"
               disabled={isLoading || !prompt.trim()}
-              className="w-full rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-600 py-3.5 text-sm font-bold text-white shadow-xl shadow-violet-600/30 transition hover:shadow-violet-600/50 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="clay-btn-primary w-full py-4 text-sm font-extrabold text-white bg-gradient-to-r from-[#F95738] to-[#EE964B] shadow-xl hover:scale-[1.01] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {isLoading ? (
                 <span className="inline-flex items-center gap-2">
@@ -308,125 +429,167 @@ export default function DesignStudio({
 
         {/* Right Preview Panel (7 cols) */}
         <div className="lg:col-span-7 flex flex-col gap-6">
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/50 p-6 backdrop-blur-md shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
+          {/* Key Selection Toolbar */}
+          <KeySelectionToolbar
+            mode={selectionMode}
+            onModeChange={handleModeChange}
+            selectedCount={selectedKeyIds.length}
+            totalCount={keys.length}
+            bundleTier={bundleTier}
+            estimatedPrice={estimatedPrice}
+          />
+
+          <div className="clay-card p-6 sm:p-7 bg-[#0D3B66] border border-[#FAF0CA]/12 text-[#FAF0CA] shadow-md">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
               <div>
-                <h2 className="text-lg font-bold text-white">
-                  Preview Layout Keycap
+                <h2 className="text-lg font-extrabold text-[#0D3B66]">
+                  Preview Studio
                 </h2>
-                <p className="text-xs text-zinc-400">
-                  {selectedModel?.brand} {selectedModel?.name} • {selectedModel?.keyCount} Tombol
+                <p className="text-xs text-[#BACAD6]">
+                  {selectedModel?.brand} {selectedModel?.name} • {selectedKeyIds.length} Tombol Dipilih
                 </p>
               </div>
 
-              {generatedSpec && (
-                <span className="rounded-full bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 text-xs font-semibold text-emerald-400">
-                  Desain Siap
-                </span>
-              )}
-            </div>
-
-            {/* Theme metadata banner if generated */}
-            {generatedSpec && (
-              <div className="mb-6 rounded-2xl border border-violet-500/30 bg-violet-950/20 p-4">
-                <h3 className="text-base font-bold text-violet-200">
-                  {generatedSpec.theme.name}
-                </h3>
-                <p className="mt-1 text-xs leading-relaxed text-zinc-300">
-                  {generatedSpec.theme.description}
-                </p>
-
-                {/* Color swatches */}
-                <div className="mt-3 flex items-center gap-3 text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className="h-4 w-4 rounded-full border border-white/20 shadow-sm"
-                      style={{ backgroundColor: generatedSpec.global.baseColor }}
-                    />
-                    <span className="text-zinc-400">Base: {generatedSpec.global.baseColor}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className="h-4 w-4 rounded-full border border-white/20 shadow-sm"
-                      style={{ backgroundColor: generatedSpec.global.legendColor }}
-                    />
-                    <span className="text-zinc-400">Legend: {generatedSpec.global.legendColor}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Matrix View */}
-            <div className="overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-950/90 p-4 shadow-inner">
-              <div className="min-w-[650px] flex flex-col gap-1.5">
-                {rowNumbers.map((rowNum) => {
-                  const rowKeys = keys
-                    .filter((k) => k.row === rowNum)
-                    .sort((a, b) => a.col - b.col);
-
-                  return (
-                    <div key={rowNum} className="flex gap-1.5 h-11">
-                      {rowKeys.map((k, idx) => {
-                        const uSize = k.size || 1;
-                        const style = getKeyStyle(k);
-
-                        return (
-                          <div
-                            key={k.id || idx}
-                            style={{
-                              flex: uSize,
-                              backgroundColor: style.backgroundColor,
-                              color: style.color,
-                              borderColor: style.borderColor,
-                            }}
-                            title={`${k.label} (${uSize}u)`}
-                            className="relative flex flex-col items-center justify-center rounded-lg border text-xs font-semibold select-none shadow-md transition-all duration-300 hover:scale-105 hover:z-10 cursor-pointer"
-                          >
-                            <span className="truncate px-1 text-[11px] font-bold">
-                              {k.label}
-                            </span>
-                            {uSize > 1 && (
-                              <span className="absolute bottom-0.5 right-1 text-[9px] opacity-60">
-                                {uSize}u
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Actions Footer */}
-            {generatedSpec ? (
-              <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-zinc-800 pt-6">
+              {/* 2D vs 3D switcher */}
+              <div className="clay-card bg-[#08233C] border border-[#FAF0CA]/15 rounded-2xl p-1 flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(JSON.stringify(generatedSpec, null, 2));
-                    alert('Spec JSON disalin ke clipboard!');
-                  }}
-                  className="w-full sm:w-auto rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-xs font-semibold text-zinc-200 hover:bg-zinc-700 transition"
+                  onClick={() => setPreviewTab('2D')}
+                  className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition cursor-pointer ${
+                    previewTab === '2D'
+                      ? 'bg-[#0D3B66] text-white shadow-sm'
+                      : 'text-[#BACAD6] hover:text-[#0D3B66]'
+                  }`}
                 >
-                  Salin JSON Spec
+                  Layout 2D
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewTab('3D')}
+                  className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition cursor-pointer ${
+                    previewTab === '3D'
+                      ? 'bg-[#0D3B66] text-white shadow-sm'
+                      : 'text-[#BACAD6] hover:text-[#0D3B66]'
+                  }`}
+                >
+                  3D Studio 🎮
+                </button>
+              </div>
+            </div>
 
-                <div className="w-full sm:w-auto flex items-center gap-3">
-                  <Link
-                    href={`/checkout?model=${selectedModel?.slug}${designId ? `&designId=${designId}` : ''}`}
-                    className="w-full sm:w-auto inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-6 py-2.5 text-xs font-bold text-white shadow-lg shadow-violet-600/30 transition hover:brightness-110"
-                  >
-                    Pesan Keycap Set Ini (Checkout) →
-                  </Link>
+            {/* Preview View Container: 2D Matrix OR 3D Canvas */}
+            {previewTab === '3D' ? (
+              <KeycapCanvas3D
+                selectionMode={selectionMode}
+                selectedKeyIds={selectedKeyIds}
+                baseColor={currentBaseColor}
+                legendColor={currentLegendColor}
+                profile={profile}
+                relief={imageRelief}
+                keys={keys}
+              />
+            ) : (
+              <div className="overflow-x-auto rounded-3xl border border-[#FAF0CA]/15 bg-[#08233C] p-5 shadow-inner">
+                <div className="min-w-[650px] flex flex-col gap-1.5">
+                  {rowNumbers.map((rowNum: number) => {
+                    const rowKeys = keys
+                      .filter((k) => k.row === rowNum)
+                      .sort((a, b) => a.col - b.col);
+
+                    return (
+                      <div key={rowNum} className="flex gap-1.5 h-11">
+                        {rowKeys.map((k, idx) => {
+                          const uSize = k.size || 1;
+                          const style = getKeyStyle(k);
+                          const isSelected = selectedKeyIds.includes(k.id);
+
+                          return (
+                            <button
+                              type="button"
+                              key={k.id || idx}
+                              onClick={() => handleKeyClick(k.id)}
+                              style={{
+                                flex: uSize,
+                                backgroundColor: style.backgroundColor,
+                                color: style.color,
+                                borderColor: isSelected ? '#F95738' : style.borderColor,
+                                opacity: style.opacity,
+                              }}
+                              title={`${k.label} (${uSize}u) - Klik untuk pilih/lepas`}
+                              className={`relative flex flex-col items-center justify-center rounded-xl border text-xs font-bold select-none shadow-sm transition-all duration-300 hover:scale-105 hover:z-10 cursor-pointer ${
+                                isSelected ? 'ring-2 ring-[#F95738] shadow-md shadow-[#F95738]/25 scale-[1.02]' : ''
+                              }`}
+                            >
+                              <span className="truncate px-1 text-[11px] font-black">
+                                {k.label}
+                              </span>
+                              {uSize > 1 && (
+                                <span className="absolute bottom-0.5 right-1 text-[9px] opacity-70 font-mono">
+                                  {uSize}u
+                                </span>
+                              )}
+                              {imageRelief && isSelected && (
+                                <span className="absolute top-0.5 right-1 text-[8px] opacity-90">
+                                  🗿
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            ) : (
-              <div className="mt-4 text-center text-xs text-zinc-500">
-                Pilih tema dan klik &ldquo;Generate Desain AI&rdquo; untuk mewarnai dan memvisualisasikan layout.
-              </div>
             )}
+
+            {/* Actions Footer */}
+            <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-[#FAF0CA]/10 pt-6">
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-[#BACAD6]">Total Biaya Pesanan:</span>
+                <span className="text-2xl font-black text-[#FAF0CA] font-mono">
+                  Rp {estimatedPrice.toLocaleString('id-ID')}
+                  <span className="ml-2 text-xs font-bold text-[#F95738]">
+                    ({selectedKeyIds.length} Tombol • {bundleTier})
+                  </span>
+                </span>
+              </div>
+
+              <div className="w-full sm:w-auto flex items-center gap-3">
+                {generatedSpec && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        JSON.stringify(
+                          {
+                            ...generatedSpec,
+                            selection: {
+                              mode: selectionMode,
+                              selectedKeys: selectedKeyIds,
+                            },
+                            relief: imageRelief,
+                          },
+                          null,
+                          2
+                        )
+                      );
+                      alert('Spec JSON disalin ke clipboard!');
+                    }}
+                    className="w-full sm:w-auto clay-btn-secondary px-5 py-2.5 text-xs font-bold text-[#0D3B66] cursor-pointer"
+                  >
+                    Salin Spec
+                  </button>
+                )}
+
+                <Link
+                  href={`/checkout?model=${selectedModel?.slug}${designId ? `&designId=${designId}` : ''}&mode=${selectionMode}&keys=${selectedKeyIds.join(',')}`}
+                  className="w-full sm:w-auto inline-flex items-center justify-center clay-btn-primary px-7 py-3 text-xs font-extrabold text-white bg-gradient-to-r from-[#F95738] to-[#EE964B] shadow-lg hover:scale-105"
+                >
+                  Pesan {selectedKeyIds.length} Tombol (Checkout) ➔
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </div>

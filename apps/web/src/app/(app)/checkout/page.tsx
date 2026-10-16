@@ -7,11 +7,13 @@ interface CheckoutPageProps {
   searchParams: Promise<{
     designId?: string;
     model?: string;
+    mode?: string;
+    keys?: string;
   }>;
 }
 
 export const metadata = {
-  title: 'Checkout & Konfirmasi Pesanan — Keycap Platform',
+  title: 'Checkout & Konfirmasi Pesanan ── Keycap Platform',
 };
 
 export default async function CheckoutPage({ searchParams }: CheckoutPageProps) {
@@ -20,7 +22,7 @@ export default async function CheckoutPage({ searchParams }: CheckoutPageProps) 
     redirect('/login?callbackUrl=/checkout');
   }
 
-  const { designId, model: modelSlug } = await searchParams;
+  const { designId, model: modelSlug, mode, keys } = await searchParams;
 
   let design: any = null;
   if (designId) {
@@ -39,9 +41,38 @@ export default async function CheckoutPage({ searchParams }: CheckoutPageProps) 
     keyboardModel = design.keyboardModel;
   }
 
-  const designName = design?.specJson?.theme?.name ?? 'Custom Keycap Set';
-  const keyboardModelName = keyboardModel ? `${keyboardModel.brand} ${keyboardModel.name}` : 'Mechanical Keyboard';
-  const keyCount = keyboardModel?.keyCount ?? 68;
+  // Parse keys if passed from query params or stored in design spec
+  const selectedKeys = keys
+    ? keys.split(',').filter(Boolean)
+    : (design?.specJson?.selection?.selectedKeys ?? []);
+  
+  const selectedMode =
+    mode ||
+    design?.specJson?.selection?.mode ||
+    (selectedKeys.length > 0 && selectedKeys.length < 50 ? 'CUSTOM' : 'FULL_SET');
+
+  let keyCount = keyboardModel?.keyCount ?? 68;
+  if (selectedKeys.length > 0) {
+    keyCount = selectedKeys.length;
+  }
+
+  let modeLabel = '';
+  if (selectedMode === 'WASD') modeLabel = ' (WASD Gamer Pack)';
+  else if (selectedMode === 'ARROWS') modeLabel = ' (Arrow Cluster)';
+  else if (selectedMode === 'ACCENT') modeLabel = ' (Accent Essentials)';
+  else if (selectedKeys.length > 0 && selectedKeys.length < (keyboardModel?.keyCount ?? 68)) {
+    modeLabel = ` (Custom Pack - ${keyCount} Keys)`;
+  }
+
+  const baseDesignName = design?.specJson?.theme?.name ?? 'Custom Keycap Set';
+  const designName = `${baseDesignName}${modeLabel}`;
+  const keyboardModelName = keyboardModel
+    ? `${keyboardModel.brand} ${keyboardModel.name}`
+    : 'Mechanical Keyboard';
+
+  const initialEstimateIdr = keyCount * 15000;
+  const initialBundle =
+    keyCount > 50 ? 'FULL_SET' : keyCount >= 5 ? 'ACCENT' : 'SAMPLER';
 
   return (
     <div className="min-h-screen bg-zinc-950 px-4 py-12 sm:px-6 lg:px-8">
@@ -58,7 +89,8 @@ export default async function CheckoutPage({ searchParams }: CheckoutPageProps) 
           designName={designName}
           keyboardModelName={keyboardModelName}
           keyCount={keyCount}
-          initialEstimateIdr={keyCount * 4500}
+          initialEstimateIdr={initialEstimateIdr}
+          initialBundle={initialBundle}
         />
       </div>
     </div>

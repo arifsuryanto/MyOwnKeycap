@@ -31,7 +31,7 @@ export default async function DesignPage({ searchParams }: DesignPageProps) {
   }));
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+    <div className="min-h-screen bg-[#071E33] text-[#FAF0CA] pb-24 font-sans selection:bg-[#F95738]/20 selection:text-[#0D3B66]">
       <DesignStudio
         initialModels={models}
         selectedModelSlug={selectedModelSlug}

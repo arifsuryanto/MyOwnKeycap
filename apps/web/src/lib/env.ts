@@ -26,7 +26,7 @@ const envSchema = z.object({
 
   // LLM
   LLM_API_KEY: z.string().min(1),
-  LLM_MODEL: z.string().default('gemini-3.8-flash'),
+  LLM_MODEL: z.string().default('gemini-2.5-flash'),
   AI_FREE_DAILY: z.coerce.number().int().min(0).default(5),
   AI_MAX_TOKENS: z.coerce.number().int().min(256).default(4096),
 

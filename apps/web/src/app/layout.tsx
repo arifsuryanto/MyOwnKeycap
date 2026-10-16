@@ -1,10 +1,17 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 
-const inter = Inter({
+const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-sans',
+  display: 'swap',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-mono',
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
@@ -30,8 +37,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id" className={inter.variable}>
-      <body className="min-h-screen bg-zinc-950 text-zinc-50 antialiased">
+    <html lang="id" className={`${plusJakartaSans.variable} ${jetbrainsMono.variable}`}>
+      <body className="font-sans min-h-screen bg-[#071E33] text-[#FAF0CA] antialiased selection:bg-[#F95738]/30 selection:text-[#FAF0CA]">
         {children}
       </body>
     </html>

@@ -135,12 +135,113 @@ const EMIT_DESIGN_SPEC_TOOL = {
   ],
 };
 
+
+export function generateMockDesignSpec(input: GenerateDesignInput): KeycapDesignSpec {
+  const p = input.prompt.toLowerCase();
+
+  let themeName = 'Custom Artisan Edition';
+  let baseColor = '#1e1e2e';
+  let legendColor = '#cdd6f4';
+  let modifierColor = '#313244';
+  let accentColor = '#f38ba8';
+  let font: 'inter' | 'roboto' | 'jetbrains-mono' = 'jetbrains-mono';
+
+  if (p.includes('cyber') || p.includes('neon') || p.includes('synth')) {
+    themeName = 'Cyberpunk Neon Pulse';
+    baseColor = '#10141e';
+    legendColor = '#00f2fe';
+    modifierColor = '#1c2237';
+    accentColor = '#ff007f';
+    font = 'jetbrains-mono';
+  } else if (p.includes('matcha') || p.includes('green') || p.includes('forest') || p.includes('nature') || p.includes('botanical')) {
+    themeName = 'Matcha Botanical Garden';
+    baseColor = '#e8ecd7';
+    legendColor = '#2d3a2e';
+    modifierColor = '#7d8c71';
+    accentColor = '#b5c99a';
+    font = 'inter';
+  } else if (p.includes('retro') || p.includes('classic') || p.includes('beige') || p.includes('vintage') || p.includes('9009')) {
+    themeName = 'Vintage Atelier 1984';
+    baseColor = '#ede8d0';
+    legendColor = '#2b2b2b';
+    modifierColor = '#968c83';
+    accentColor = '#d65d0e';
+    font = 'roboto';
+  } else if (p.includes('sakura') || p.includes('pink') || p.includes('pastel') || p.includes('macaron')) {
+    themeName = 'Sakura Blossom Artisan';
+    baseColor = '#fff5f7';
+    legendColor = '#4a4e69';
+    modifierColor = '#fcd5ce';
+    accentColor = '#f28482';
+    font = 'inter';
+  } else if (p.includes('dark') || p.includes('stealth') || p.includes('black') || p.includes('carbon')) {
+    themeName = 'Stealth Obsidian Matrix';
+    baseColor = '#18181b';
+    legendColor = '#a1a1aa';
+    modifierColor = '#27272a';
+    accentColor = '#3f3f46';
+    font = 'jetbrains-mono';
+  } else if (p.includes('blue') || p.includes('ocean') || p.includes('nautilus') || p.includes('sea')) {
+    themeName = 'Deep Ocean Abyss';
+    baseColor = '#0b1d3a';
+    legendColor = '#e0f2fe';
+    modifierColor = '#1e3a5f';
+    accentColor = '#38bdf8';
+    font = 'inter';
+  }
+
+  const raw = {
+    theme: {
+      name: themeName,
+      description: `Bespoke artisanal mechanical keycaps inspired by: "${input.prompt.slice(0, 100)}"`,
+    },
+    global: {
+      profile: (input.options?.profile as any) || 'CHERRY',
+      stem: 'MX',
+      material: (input.options?.material as any) || 'PETG',
+      finish: 'MATTE',
+      baseColor,
+      legendColor,
+      font,
+      stemToleranceMm: 0.15,
+      wallMm: 1.5,
+    },
+    overrides: [
+      {
+        target: { group: 'MODIFIERS' },
+        baseColor: modifierColor,
+        legendColor,
+      },
+      {
+        target: { group: 'ESC' },
+        baseColor: accentColor,
+        legendColor: baseColor,
+      },
+      {
+        target: { group: 'ENTER' },
+        baseColor: accentColor,
+        legendColor: baseColor,
+      },
+      {
+        target: { group: 'SPACE' },
+        baseColor: modifierColor,
+        legendColor,
+      },
+    ],
+  };
+
+  const { spec } = validateAndSanitizeDesignSpec(raw);
+  return spec;
+}
+
 export class GeminiProvider implements LlmClient {
   private client: GoogleGenAI;
   private model: string;
+  private apiKey: string;
 
   constructor(apiKey: string, model: string = 'gemini-2.5-flash') {
-    this.client = new GoogleGenAI({ apiKey });
+    this.apiKey = apiKey;
+    this.client = new GoogleGenAI({ apiKey: apiKey || 'dummy-key' });
     this.model = model;
   }
 
@@ -149,6 +250,17 @@ export class GeminiProvider implements LlmClient {
     const moderation = moderatePrompt(input.prompt);
     if (moderation.flagged) {
       throw new Error(`Input prompt rejected by moderation policy: ${moderation.reason}`);
+    }
+
+    // Check for local mock / simulation mode when API key is not yet configured
+    const isMockKey =
+      !this.apiKey ||
+      this.apiKey === 'your-gemini-api-key' ||
+      this.apiKey === 'mock' ||
+      this.apiKey.startsWith('mock_');
+
+    if (isMockKey) {
+      return generateMockDesignSpec(input);
     }
 
     const userPrompt = buildUserPrompt(input);
@@ -199,6 +311,13 @@ export class GeminiProvider implements LlmClient {
           // Retry with feedback if attempt < 2
           continue;
         }
+
+        // In development mode, if the API key fails or network times out, gracefully fallback to local design engine
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn(`[GeminiProvider] Google Gemini API request encountered error: ${err.message}. Falling back to local development generator.`);
+          return generateMockDesignSpec(input);
+        }
+
         throw err;
       }
     }

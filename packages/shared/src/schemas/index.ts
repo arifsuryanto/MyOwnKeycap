@@ -1,5 +1,5 @@
-export { KeycapDesignSpec, canonicalize, specHash } from './keycap-design-spec';
-export type { Profile, StemType, Material, Finish, FontId, LegendSpec, KeyOverride } from './keycap-design-spec';
+export { KeycapDesignSpec, canonicalize, specHash, ImageReliefSpec, KeySelectionMode } from './keycap-design-spec';
+export type { Profile, StemType, Material, Finish, FontId, LegendSpec, KeyOverride, ImageReliefSpec as ImageReliefSpecType, KeySelectionMode as KeySelectionModeType } from './keycap-design-spec';
 export { Profile as ProfileEnum, StemType as StemTypeEnum, Material as MaterialEnum, Finish as FinishEnum, FontId as FontIdEnum } from './keycap-design-spec';
 
 export { KleKey, KleLayout, KleImportSchema } from './kle';

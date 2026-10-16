@@ -13,6 +13,8 @@ export interface CreateDesignInput {
     finish?: 'RAW' | 'SANDED' | 'PAINTED';
     baseColor?: string;
     legendColor?: string;
+    selection?: { mode: 'FULL_SET' | 'WASD' | 'ARROWS' | 'ACCENT' | 'CUSTOM'; selectedKeys?: string[] };
+    relief?: any;
   };
 }
 
@@ -103,6 +105,8 @@ export class DesignService {
 
     // Validate and hash
     const { spec, hash } = validateAndSanitizeDesignSpec(rawSpec);
+    if (input.options?.selection) { spec.selection = input.options.selection as any; }
+    if (input.options?.relief) { spec.relief = input.options.relief as any; }
 
     // Persist design
     // If not logged in, we associate with a placeholder/anonymous or create when saving
@@ -147,3 +151,4 @@ export class DesignService {
     });
   }
 }
+

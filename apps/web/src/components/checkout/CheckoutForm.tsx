@@ -9,6 +9,7 @@ interface CheckoutFormProps {
   keyboardModelName?: string;
   keyCount?: number;
   initialEstimateIdr?: number;
+  initialBundle?: 'FULL_SET' | 'ACCENT' | 'SAMPLER';
 }
 
 export default function CheckoutForm({
@@ -17,10 +18,11 @@ export default function CheckoutForm({
   keyboardModelName = 'Standard Keyboard',
   keyCount = 68,
   initialEstimateIdr = 280000,
+  initialBundle,
 }: CheckoutFormProps) {
   const router = useRouter();
 
-  const [bundle, setBundle] = useState<'FULL_SET' | 'ACCENT' | 'SAMPLER'>('FULL_SET');
+  const [bundle, setBundle] = useState<'FULL_SET' | 'ACCENT' | 'SAMPLER'>(initialBundle || (keyCount > 50 ? 'FULL_SET' : keyCount >= 5 ? 'ACCENT' : 'SAMPLER'));
   const [recipientName, setRecipientName] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -210,10 +212,10 @@ export default function CheckoutForm({
           <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 mb-6">
             <h3 className="text-sm font-bold text-white">{designName}</h3>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Keyboard: {keyboardModelName} • {keyCount} Keys
+              Keyboard: {keyboardModelName} â€¢ {keyCount} Keys
             </p>
             <div className="mt-3 flex items-center gap-2 text-[11px] text-emerald-400">
-              <span>✓</span>
+              <span>âœ“</span>
               <span>Fit-Guaranteed (Presisi stem &amp; profil dijamin)</span>
             </div>
           </div>
@@ -246,7 +248,7 @@ export default function CheckoutForm({
 
           {error && (
             <div className="mb-4 rounded-xl border border-red-500/40 bg-red-950/30 p-3 text-xs text-red-300">
-              ⚠️ {error}
+              âš ï¸ {error}
             </div>
           )}
 
@@ -256,7 +258,7 @@ export default function CheckoutForm({
             disabled={isSubmitting}
             className="w-full rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-600 py-4 text-sm font-bold text-white shadow-xl shadow-violet-600/30 transition hover:shadow-violet-600/50 hover:brightness-110 disabled:opacity-50 cursor-pointer"
           >
-            {isSubmitting ? 'Memproses Pesanan...' : 'Lanjut ke Pembayaran QRIS →'}
+            {isSubmitting ? 'Memproses Pesanan...' : 'Lanjut ke Pembayaran QRIS â†’'}
           </button>
 
           <p className="mt-4 text-center text-[11px] text-zinc-500">
@@ -267,3 +269,4 @@ export default function CheckoutForm({
     </form>
   );
 }
+

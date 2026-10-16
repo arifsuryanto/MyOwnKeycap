@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
     // Server Actions are stable in Next.js 15
     serverActions: {
       bodySizeLimit: '2mb',
+      allowedOrigins: ['*.trycloudflare.com'],
     },
   },
 
